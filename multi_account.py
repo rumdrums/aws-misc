@@ -3,52 +3,7 @@
 import boto3
 import pprint
 import yaml
-
-class Instance:
-  def __init__(self, instance_id, client):
-    self.instance_id = instance_id
-    self.client = client
-
-class Subnet:
-  def __init__(self, subnet_id, client):
-    self.subnet_id = subnet_id
-    self.client = client
-    #self._subnet = client.describe_subnets(SubnetIds=[self.subnet_id])
-    self.instances = self.get_instances()
-   
-  def get_dict(self):
-    subnet_dict = {}
-    subnet_dict['id'] = self.subnet_id
-    subnet_dict['instances'] = self.instances
-    return subnet_dict
-
-  def get_instances(self):
-    instance_ids = [ i['InstanceId'] for i in self.client.describe_instances() if i['SubnetId'] == self.subnet_id ]
-    return instance_ids
-
-class Vpc:
-  def __init__(self, vpc_id, client):
-    self.vpc_id = vpc_id
-    self.client = client
-    self.subnets = self.get_subnets()
-    self._vpc = client.describe_vpcs(VpcIds=[self.vpc_id])
-    self.vpc_name = self.get_vpc_name()
-
-  def get_subnets(self):
-    subnet_ids = [ i['SubnetId'] for i in self.client.describe_subnets()['Subnets'] if i['VpcId'] == self.vpc_id ] 
-    return [ Subnet(i, self.client) for i in subnet_ids ]
-
-  def get_dict(self):
-    vpc_dict = {}
-    vpc_dict['id'] = self.vpc_id
-    vpc_dict['name'] = self.vpc_name
-    vpc_dict['subnets'] = [ i.get_dict() for i in self.subnets ]
-    return vpc_dict
-
-  def get_vpc_name(self):
-   # FIXME: exception handling if key doesn't exist:
-   if 'Tags' in self._vpc['Vpcs'][0]:
-     return [ i['Value'] for i in self._vpc['Vpcs'][0]['Tags'] if i['Key'] == 'Name' ][0]
+import re
  
 class Account:
   def __init__(self, acct_num, client):
@@ -113,7 +68,8 @@ def print_account_stuff(account_info):
 
 def write_to_yaml(account_info, file_name):
   with open(file_name, 'w') as f:
-    f.write(yaml.dump(account_info, default_flow_style=False))
+    yaml.safe_dump(account_info, f, encoding='utf-8', allow_unicode=True)
+    #f.write(yaml.dump(account_info, default_flow_style=False))
     
 def get_account_array(account_numbers):
   account_info = {}
@@ -126,6 +82,31 @@ def get_account_array(account_numbers):
     account_array.append(account_info[acct].get_dict())
   #pprint.pprint(account_array)
   return account_array 
+
+def get_subnets_from_vpc_ids(account_array, vpc_ids):
+  subnets = []
+  for account in account_array:
+    for subnet in account['subnets']:
+      for vpc_id in vpc_ids:
+        if subnet['VpcId'] == vpc_id:
+          subnets.append(dict(subnet_id=subnet['SubnetId'], vpc_id=vpc_id))
+  return subnets
+
+
+def get_vpcs_by_name_regex(account_array, pattern):
+  """ parse account_info dict and get those whose names match given regex """
+
+  prog = re.compile('%s' % pattern)
+
+  keepers = []
+  for account in account_array:
+    for vpc in account['vpcs']:
+      if 'Tags' in vpc:
+        for tag in vpc['Tags']:
+          if tag['Key'] == 'Name':
+            if prog.search(tag['Value']):
+              keepers.append(vpc)
+  return keepers
 
 def main():
   import argparse
