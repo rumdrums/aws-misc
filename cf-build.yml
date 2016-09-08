@@ -1,0 +1,35 @@
+---
+# vars:
+## source_jinja_file
+## cf_bucket
+## template_parameters
+## region
+
+- name: "jinja-process the yaml"
+  template:
+    src: "{{source_jinja_file}}"
+    dest: "/tmp/{{stack}}.yml"
+
+- name: "convert yaml to json"
+  shell: "scripts/convert-to-json.py --yaml-file /tmp/{{stack}}.yml"
+
+- name: "upload {{stack}} cf template to s3"
+  s3:
+    bucket: "{{cf_bucket}}"
+    object: "/cf/{{stack}}.json"
+    src: "/tmp/{{stack}}.json"
+    mode: put
+    region: "{{region}}"
+
+- name: "ensure stack"
+  cloudformation:
+    stack_name: "{{stack}}"
+    state: "present"
+    region: "{{region}}"
+    template_url: "https://s3.amazonaws.com/{{cf_bucket}}/cf/{{stack}}.json"
+    template_parameters: "{{template_parameters}}"
+  register: "{{stack}}_stack"
+
+- name: debug
+  debug:
+    var: "{{stack}}_stack"

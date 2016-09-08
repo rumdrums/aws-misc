@@ -1,0 +1,65 @@
+---
+### Instance Profile
+
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Instance perms for s3 access"
+
+Parameters:
+  BucketName:
+    Default: ''
+    Type: String
+    Description: Bucket Name to Associate Instance Perms with
+
+Resources:
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: "/"
+      Policies:
+      - PolicyName: S3Access
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            Effect: Allow
+            Action:
+              - s3:GetBucketLocation
+              - s3:GetBucketAcl
+              - s3:GetObject
+              - s3:ListBucket
+              - s3:ListBucketVersions
+              - s3:PutObject
+              - s3:PutObjectAcl
+              - s3:DeleteObject
+              - s3:DeleteObjectAcl
+            Resource:
+            - Fn::Join:
+              - ''
+              - - 'arn:aws:s3:::'
+                - Ref: BucketName
+                - "/*"
+            - Fn::Join:
+              - ''
+              - - 'arn:aws:s3:::'
+                - Ref: BucketName
+      AssumeRolePolicyDocument:
+        Statement:
+          Action:
+            - sts:AssumeRole
+          Effect: Allow
+          Principal:
+            Service:
+            - ec2.amazonaws.com
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: "/"
+      Roles:
+      - Ref: InstanceRole
+
+Outputs:
+  InstanceProfile:
+    Value:
+      "Fn::GetAtt":
+        - InstanceProfile
+        - Arn
